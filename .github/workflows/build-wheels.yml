@@ -34,22 +34,32 @@ jobs:
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
           CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
           CIBW_BEFORE_ALL_LINUX: |
-            yum install -y epel-release || true
-            yum install -y speexdsp-devel swig gcc-c++ || true
-            # If yum fails, try building from source
-            if ! pkg-config --exists speexdsp; then
-              curl -L https://github.com/xiph/speexdsp/releases/download/SpeexDSP-1.2.1/speexdsp-1.2.1.tar.gz | tar xz
-              cd speexdsp-1.2.1
-              ./configure --prefix=/usr/local
-              make && make install
-              cd ..
-              ldconfig
-            fi
+            # Install build tools
+            yum install -y gcc gcc-c++ make autoconf automake libtool swig || true
+            
+            # Build speexdsp from source
+            curl -L https://github.com/xiph/speexdsp/releases/download/SpeexDSP-1.2.1/speexdsp-1.2.1.tar.gz -o speexdsp.tar.gz
+            tar xzf speexdsp.tar.gz
+            cd speexdsp-1.2.1
+            ./configure --prefix=/usr/local --enable-static --disable-shared
+            make -j$(nproc)
+            make install
+            cd ..
+            rm -rf speexdsp-1.2.1 speexdsp.tar.gz
+            
+            # Update library cache
+            ldconfig /usr/local/lib || true
+            
+            # Verify installation
+            ls -la /usr/local/lib/libspeexdsp*
+            ls -la /usr/local/include/speex/
           CIBW_ENVIRONMENT_LINUX: >
-            PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/lib64/pkgconfig"
-            LDFLAGS="-L/usr/local/lib -L/usr/lib64"
-            CPPFLAGS="-I/usr/local/include -I/usr/include"
-            LD_LIBRARY_PATH="/usr/local/lib:/usr/lib64"
+            PKG_CONFIG_PATH="/usr/local/lib/pkgconfig"
+            LDFLAGS="-L/usr/local/lib -static-libgcc"
+            CPPFLAGS="-I/usr/local/include"
+            LIBRARY_PATH="/usr/local/lib"
+            C_INCLUDE_PATH="/usr/local/include"
+            CPLUS_INCLUDE_PATH="/usr/local/include"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -85,8 +95,6 @@ jobs:
             LDFLAGS="-L$(brew --prefix speexdsp)/lib"
             CPPFLAGS="-I$(brew --prefix speexdsp)/include"
             PKG_CONFIG_PATH="$(brew --prefix speexdsp)/lib/pkgconfig"
-            DYLD_LIBRARY_PATH="$(brew --prefix speexdsp)/lib"
-          # Skip delocate to avoid library bundling issues
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: ""
 
       - name: Upload wheels
