@@ -31,13 +31,11 @@ jobs:
         env:
           CIBW_BUILD: "cp38-manylinux* cp39-manylinux* cp310-manylinux* cp311-manylinux* cp312-manylinux*"
           CIBW_ARCHS_LINUX: ${{ matrix.arch }}
-          CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
-          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
           CIBW_BEFORE_ALL_LINUX: |
-            set -ex
-            
-            # Install build tools
-            yum install -y gcc gcc-c++ make curl swig pcre-devel
+            # Install build tools (AlmaLinux 8 based)
+            dnf install -y gcc gcc-c++ make curl swig pkgconfig || yum install -y gcc gcc-c++ make curl swig pkgconfig || true
             
             # Download and build speexdsp from source
             cd /tmp
@@ -51,15 +49,14 @@ jobs:
             make install
             
             # Update linker cache
-            echo "/usr/local/lib" >> /etc/ld.so.conf.d/local.conf
+            echo "/usr/local/lib" > /etc/ld.so.conf.d/speexdsp.conf
             ldconfig
             
-            # Debug info
-            echo "=== Checking speexdsp installation ==="
-            find /usr/local -name "*speex*" 2>/dev/null || echo "No speex files found"
-            pkg-config --exists speexdsp && pkg-config --libs speexdsp || echo "pkg-config not found for speexdsp"
+            # Verify (non-fatal)
+            ls -la /usr/local/lib/libspeex* || true
+            ls -la /usr/local/include/speex/ || true
           CIBW_ENVIRONMENT_LINUX: >
-            PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/lib64/pkgconfig"
+            PKG_CONFIG_PATH="/usr/local/lib/pkgconfig"
             LDFLAGS="-L/usr/local/lib"
             CPPFLAGS="-I/usr/local/include"
             LD_LIBRARY_PATH="/usr/local/lib"
