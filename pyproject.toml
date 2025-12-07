@@ -52,21 +52,19 @@ archs = ["x86_64", "aarch64"]
 manylinux-x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
 before-all = """
-dnf install -y gcc gcc-c++ make curl pkgconfig || yum install -y gcc gcc-c++ make curl pkgconfig || true
+dnf install -y gcc gcc-c++ make curl || yum install -y gcc gcc-c++ make curl || true
 cd /tmp
-curl -L -o speexdsp.tar.gz https://github.com/xiph/speexdsp/releases/download/SpeexDSP-1.2.1/speexdsp-1.2.1.tar.gz
+curl -L -o speexdsp.tar.gz https://ftp.osuosl.org/pub/xiph/releases/speex/speexdsp-1.2.1.tar.gz
 tar xzf speexdsp.tar.gz
 cd speexdsp-1.2.1
 ./configure --prefix=/usr
 make -j$(nproc)
 make install
 ldconfig
-echo "=== Verify speexdsp installation ==="
-ls -la /usr/include/speex/ || echo "No headers in /usr/include/speex"
-ls -la /usr/lib/libspeex* /usr/lib64/libspeex* || echo "No libs found"
-cat /usr/lib/pkgconfig/speexdsp.pc /usr/lib64/pkgconfig/speexdsp.pc || echo "No pkgconfig"
+echo "=== Verify speexdsp library ==="
+ls -la /usr/lib/libspeex* /usr/lib64/libspeex* 2>/dev/null || echo "libs installed"
 """
-environment = { PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib64/pkgconfig", LDFLAGS="-L/usr/lib -L/usr/lib64", CPPFLAGS="-I/usr/include", LD_LIBRARY_PATH="/usr/lib:/usr/lib64", LIBRARY_PATH="/usr/lib:/usr/lib64", C_INCLUDE_PATH="/usr/include" }
+environment = { LDFLAGS="-L/usr/lib -L/usr/lib64", LD_LIBRARY_PATH="/usr/lib:/usr/lib64", LIBRARY_PATH="/usr/lib:/usr/lib64" }
 
 [tool.cibuildwheel.macos]
 archs = ["x86_64", "arm64"]

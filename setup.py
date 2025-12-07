@@ -23,8 +23,9 @@ def get_pkg_config(package, option):
         return []
 
 
-# Base configuration
-include_dirs = ['src']
+# Base configuration - include bundled speex headers first
+# Headers are at src/include/speex/*.h, so include src/include to allow #include "speex/..."
+include_dirs = ['src', 'src/include']
 library_dirs = []
 libraries = ['speexdsp']
 define_macros = []
