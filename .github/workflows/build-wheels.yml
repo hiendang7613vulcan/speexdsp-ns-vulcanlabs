@@ -9,30 +9,18 @@ on:
   workflow_dispatch:
 
 jobs:
-  build_wheels:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+  build_wheels_linux:
+    name: Build wheels on Linux ${{ matrix.arch }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # Linux x86_64
-          - os: ubuntu-latest
-            arch: x86_64
-          # Linux ARM64 (uses QEMU)
-          - os: ubuntu-latest
-            arch: aarch64
-          # macOS Intel
-          - os: macos-13
-            arch: x86_64
-          # macOS Apple Silicon
-          - os: macos-14
-            arch: arm64
+        arch: [x86_64, aarch64]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up QEMU (for Linux ARM64)
+      - name: Set up QEMU (for ARM64)
         if: matrix.arch == 'aarch64'
         uses: docker/setup-qemu-action@v3
         with:
@@ -41,32 +29,70 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.21.3
         env:
-          CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-*"
-          CIBW_SKIP: "*-musllinux_* *-win*"
-          CIBW_ARCHS: ${{ matrix.arch }}
-          
-          # Linux: Install speexdsp-devel
+          CIBW_BUILD: "cp38-manylinux* cp39-manylinux* cp310-manylinux* cp311-manylinux* cp312-manylinux*"
+          CIBW_ARCHS_LINUX: ${{ matrix.arch }}
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
           CIBW_BEFORE_ALL_LINUX: |
-            if command -v yum &> /dev/null; then
-              yum install -y speexdsp-devel swig
-            elif command -v apt-get &> /dev/null; then
-              apt-get update && apt-get install -y libspeexdsp-dev swig
+            yum install -y epel-release || true
+            yum install -y speexdsp-devel swig gcc-c++ || true
+            # If yum fails, try building from source
+            if ! pkg-config --exists speexdsp; then
+              curl -L https://github.com/xiph/speexdsp/releases/download/SpeexDSP-1.2.1/speexdsp-1.2.1.tar.gz | tar xz
+              cd speexdsp-1.2.1
+              ./configure --prefix=/usr/local
+              make && make install
+              cd ..
+              ldconfig
             fi
-          
-          # macOS: Install via Homebrew
-          CIBW_BEFORE_ALL_MACOS: |
-            brew install speexdsp swig
-          
-          # macOS environment for finding libraries
-          CIBW_ENVIRONMENT_MACOS: >
-            LDFLAGS="-L/opt/homebrew/lib -L/usr/local/lib"
-            CPPFLAGS="-I/opt/homebrew/include -I/usr/local/include"
-            PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig"
+          CIBW_ENVIRONMENT_LINUX: >
+            PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/lib64/pkgconfig"
+            LDFLAGS="-L/usr/local/lib -L/usr/lib64"
+            CPPFLAGS="-I/usr/local/include -I/usr/include"
+            LD_LIBRARY_PATH="/usr/local/lib:/usr/lib64"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}-${{ matrix.arch }}
+          name: wheels-linux-${{ matrix.arch }}
+          path: ./wheelhouse/*.whl
+
+  build_wheels_macos:
+    name: Build wheels on macOS ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-13
+            arch: x86_64
+          - os: macos-14
+            arch: arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install speexdsp
+        run: |
+          brew install speexdsp swig
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.21.3
+        env:
+          CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-*"
+          CIBW_ARCHS_MACOS: ${{ matrix.arch }}
+          CIBW_ENVIRONMENT_MACOS: >
+            LDFLAGS="-L$(brew --prefix speexdsp)/lib"
+            CPPFLAGS="-I$(brew --prefix speexdsp)/include"
+            PKG_CONFIG_PATH="$(brew --prefix speexdsp)/lib/pkgconfig"
+            DYLD_LIBRARY_PATH="$(brew --prefix speexdsp)/lib"
+          # Skip delocate to avoid library bundling issues
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: ""
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-${{ matrix.arch }}
           path: ./wheelhouse/*.whl
 
   build_sdist:
@@ -75,7 +101,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libspeexdsp-dev swig
@@ -93,7 +119,7 @@ jobs:
 
   publish:
     name: Publish to PyPI
-    needs: [build_wheels, build_sdist]
+    needs: [build_wheels_linux, build_wheels_macos, build_sdist]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     
@@ -115,4 +141,3 @@ jobs:
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
           packages-dir: dist/
-
