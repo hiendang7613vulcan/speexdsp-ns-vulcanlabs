@@ -48,14 +48,25 @@ skip = "*-musllinux_* *-win*"
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64", "aarch64"]
-before-all = [
-    "yum install -y speexdsp-devel swig || (apt-get update && apt-get install -y libspeexdsp-dev swig)"
-]
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
+before-all = """
+dnf install -y gcc gcc-c++ make curl swig pkgconfig || yum install -y gcc gcc-c++ make curl swig pkgconfig || true
+cd /tmp
+curl -L -o speexdsp.tar.gz https://github.com/xiph/speexdsp/releases/download/SpeexDSP-1.2.1/speexdsp-1.2.1.tar.gz
+tar xzf speexdsp.tar.gz
+cd speexdsp-1.2.1
+./configure --prefix=/usr/local
+make -j$(nproc)
+make install
+echo "/usr/local/lib" > /etc/ld.so.conf.d/speexdsp.conf
+ldconfig
+"""
+environment = { PKG_CONFIG_PATH="/usr/local/lib/pkgconfig", LDFLAGS="-L/usr/local/lib", CPPFLAGS="-I/usr/local/include", LD_LIBRARY_PATH="/usr/local/lib", LIBRARY_PATH="/usr/local/lib", C_INCLUDE_PATH="/usr/local/include" }
 
 [tool.cibuildwheel.macos]
 archs = ["x86_64", "arm64"]
-before-all = [
-    "brew install speexdsp swig"
-]
-environment = { LDFLAGS="-L/opt/homebrew/lib -L/usr/local/lib", CPPFLAGS="-I/opt/homebrew/include -I/usr/local/include" }
+before-all = "brew install speexdsp swig || true"
+environment = { LDFLAGS="-L/opt/homebrew/lib -L/usr/local/lib", CPPFLAGS="-I/opt/homebrew/include -I/usr/local/include", PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig" }
+repair-wheel-command = ""
 

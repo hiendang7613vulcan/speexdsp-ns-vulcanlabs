@@ -29,39 +29,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.21.3
         env:
-          CIBW_BUILD: "cp38-manylinux* cp39-manylinux* cp310-manylinux* cp311-manylinux* cp312-manylinux*"
           CIBW_ARCHS_LINUX: ${{ matrix.arch }}
-          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
-          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
-          CIBW_BEFORE_ALL_LINUX: |
-            # Install build tools (AlmaLinux 8 based)
-            dnf install -y gcc gcc-c++ make curl swig pkgconfig || yum install -y gcc gcc-c++ make curl swig pkgconfig || true
-            
-            # Download and build speexdsp from source
-            cd /tmp
-            curl -L -o speexdsp.tar.gz https://github.com/xiph/speexdsp/releases/download/SpeexDSP-1.2.1/speexdsp-1.2.1.tar.gz
-            tar xzf speexdsp.tar.gz
-            cd speexdsp-1.2.1
-            
-            # Configure and build
-            ./configure --prefix=/usr/local
-            make -j$(nproc)
-            make install
-            
-            # Update linker cache
-            echo "/usr/local/lib" > /etc/ld.so.conf.d/speexdsp.conf
-            ldconfig
-            
-            # Verify (non-fatal)
-            ls -la /usr/local/lib/libspeex* || true
-            ls -la /usr/local/include/speex/ || true
-          CIBW_ENVIRONMENT_LINUX: >
-            PKG_CONFIG_PATH="/usr/local/lib/pkgconfig"
-            LDFLAGS="-L/usr/local/lib"
-            CPPFLAGS="-I/usr/local/include"
-            LD_LIBRARY_PATH="/usr/local/lib"
-            LIBRARY_PATH="/usr/local/lib"
-            C_INCLUDE_PATH="/usr/local/include"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -84,20 +52,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install speexdsp
-        run: |
-          brew install speexdsp swig
-
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.21.3
         env:
-          CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-*"
           CIBW_ARCHS_MACOS: ${{ matrix.arch }}
-          CIBW_ENVIRONMENT_MACOS: >
-            LDFLAGS="-L$(brew --prefix speexdsp)/lib"
-            CPPFLAGS="-I$(brew --prefix speexdsp)/include"
-            PKG_CONFIG_PATH="$(brew --prefix speexdsp)/lib/pkgconfig"
-          CIBW_REPAIR_WHEEL_COMMAND_MACOS: ""
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
