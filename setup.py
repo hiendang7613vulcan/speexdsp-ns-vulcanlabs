@@ -5,7 +5,6 @@ import sys
 import subprocess
 from glob import glob
 from setuptools import setup, Extension
-from distutils.command.build import build
 
 
 with open('README.md') as f:
@@ -27,14 +26,17 @@ def get_pkg_config(package, option):
 # Base configuration
 include_dirs = ['src']
 library_dirs = []
-libraries = ['speexdsp', 'stdc++']
+libraries = ['speexdsp']
 define_macros = []
-extra_compile_args = []
+extra_compile_args = ['-std=c++11']
 extra_link_args = []
 
 # Try to get paths from pkg-config
 pkg_cflags = get_pkg_config('speexdsp', '--cflags')
 pkg_libs = get_pkg_config('speexdsp', '--libs')
+
+print(f"[setup.py] pkg-config --cflags speexdsp: {pkg_cflags}")
+print(f"[setup.py] pkg-config --libs speexdsp: {pkg_libs}")
 
 for flag in pkg_cflags:
     if flag.startswith('-I'):
@@ -44,9 +46,50 @@ for flag in pkg_libs:
     if flag.startswith('-L'):
         library_dirs.append(flag[2:])
 
-# Add common paths
-common_include_paths = ['/usr/local/include', '/usr/local/include/speex', '/usr/include', '/usr/include/speex']
-common_lib_paths = ['/usr/local/lib', '/usr/local/lib64', '/usr/lib', '/usr/lib64']
+# Add paths from environment variables
+env_cppflags = os.environ.get('CPPFLAGS', '')
+env_ldflags = os.environ.get('LDFLAGS', '')
+env_c_include = os.environ.get('C_INCLUDE_PATH', '')
+env_library_path = os.environ.get('LIBRARY_PATH', '')
+
+print(f"[setup.py] CPPFLAGS: {env_cppflags}")
+print(f"[setup.py] LDFLAGS: {env_ldflags}")
+print(f"[setup.py] C_INCLUDE_PATH: {env_c_include}")
+print(f"[setup.py] LIBRARY_PATH: {env_library_path}")
+
+for flag in env_cppflags.split():
+    if flag.startswith('-I'):
+        path = flag[2:]
+        if path not in include_dirs:
+            include_dirs.append(path)
+
+for flag in env_ldflags.split():
+    if flag.startswith('-L'):
+        path = flag[2:]
+        if path not in library_dirs:
+            library_dirs.append(path)
+
+for path in env_c_include.split(':'):
+    if path and path not in include_dirs:
+        include_dirs.append(path)
+
+for path in env_library_path.split(':'):
+    if path and path not in library_dirs:
+        library_dirs.append(path)
+
+# Add common paths for fallback
+common_include_paths = [
+    '/usr/local/include',
+    '/usr/local/include/speex',
+    '/usr/include',
+    '/usr/include/speex',
+]
+common_lib_paths = [
+    '/usr/local/lib',
+    '/usr/local/lib64',
+    '/usr/lib',
+    '/usr/lib64',
+]
 
 for path in common_include_paths:
     if os.path.exists(path) and path not in include_dirs:
@@ -56,16 +99,23 @@ for path in common_lib_paths:
     if os.path.exists(path) and path not in library_dirs:
         library_dirs.append(path)
 
-sources = (
-    glob('src/noise_suppression.cpp') +
-    ['src/speexdsp_ns.i']
-)
+print(f"[setup.py] Final include_dirs: {include_dirs}")
+print(f"[setup.py] Final library_dirs: {library_dirs}")
 
-swig_opts = (
-    ['-c++'] +
-    ['-I' + h for h in include_dirs]
-)
+# Check if speex header exists
+for inc_dir in include_dirs:
+    speex_header = os.path.join(inc_dir, 'speex', 'speex_preprocess.h')
+    if os.path.exists(speex_header):
+        print(f"[setup.py] Found speex header at: {speex_header}")
+        break
+else:
+    print("[setup.py] WARNING: speex/speex_preprocess.h not found in any include directory!")
 
+# Use pre-generated SWIG wrapper (no SWIG dependency at build time)
+sources = [
+    'src/noise_suppression.cpp',
+    'src/speexdsp_ns_wrap.cpp',
+]
 
 setup(
     name='speexdsp-ns-vulcanlabs',
@@ -81,13 +131,12 @@ setup(
         Extension(
             name='speexdsp_ns._speexdsp_ns',
             sources=sources,
-            swig_opts=swig_opts,
             include_dirs=include_dirs,
             library_dirs=library_dirs,
             libraries=libraries,
             define_macros=define_macros,
             extra_compile_args=extra_compile_args,
-            extra_link_args=extra_link_args
+            extra_link_args=extra_link_args,
         )
     ],
     classifiers=[
