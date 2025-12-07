@@ -77,18 +77,18 @@ for path in env_library_path.split(':'):
     if path and path not in library_dirs:
         library_dirs.append(path)
 
-# Add common paths for fallback
+# Add common paths for fallback (check /usr first for manylinux)
 common_include_paths = [
-    '/usr/local/include',
-    '/usr/local/include/speex',
     '/usr/include',
     '/usr/include/speex',
+    '/usr/local/include',
+    '/usr/local/include/speex',
 ]
 common_lib_paths = [
-    '/usr/local/lib',
-    '/usr/local/lib64',
     '/usr/lib',
     '/usr/lib64',
+    '/usr/local/lib',
+    '/usr/local/lib64',
 ]
 
 for path in common_include_paths:

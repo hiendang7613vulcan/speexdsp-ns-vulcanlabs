@@ -57,15 +57,16 @@ cd /tmp
 curl -L -o speexdsp.tar.gz https://github.com/xiph/speexdsp/releases/download/SpeexDSP-1.2.1/speexdsp-1.2.1.tar.gz
 tar xzf speexdsp.tar.gz
 cd speexdsp-1.2.1
-./configure --prefix=/usr/local
+./configure --prefix=/usr
 make -j$(nproc)
 make install
-echo "/usr/local/lib" > /etc/ld.so.conf.d/speexdsp.conf
 ldconfig
-ls -la /usr/local/include/speex/ || true
-ls -la /usr/local/lib/libspeex* || true
+echo "=== Verify speexdsp installation ==="
+ls -la /usr/include/speex/ || echo "No headers in /usr/include/speex"
+ls -la /usr/lib/libspeex* /usr/lib64/libspeex* || echo "No libs found"
+cat /usr/lib/pkgconfig/speexdsp.pc /usr/lib64/pkgconfig/speexdsp.pc || echo "No pkgconfig"
 """
-environment = { PKG_CONFIG_PATH="/usr/local/lib/pkgconfig", LDFLAGS="-L/usr/local/lib", CPPFLAGS="-I/usr/local/include", LD_LIBRARY_PATH="/usr/local/lib", LIBRARY_PATH="/usr/local/lib", C_INCLUDE_PATH="/usr/local/include" }
+environment = { PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib64/pkgconfig", LDFLAGS="-L/usr/lib -L/usr/lib64", CPPFLAGS="-I/usr/include", LD_LIBRARY_PATH="/usr/lib:/usr/lib64", LIBRARY_PATH="/usr/lib:/usr/lib64", C_INCLUDE_PATH="/usr/include" }
 
 [tool.cibuildwheel.macos]
 archs = ["x86_64", "arm64"]
